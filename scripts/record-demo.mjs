@@ -24,8 +24,10 @@ const context = await browser.newContext({
   colorScheme: "dark",
 });
 const page = await context.newPage();
-const marks = [];
+// The video starts when the page is created; time everything from there so
+// chapter marks line up with the recording.
 const t0 = Date.now();
+const marks = [];
 const mark = (label) => marks.push({ t: (Date.now() - t0) / 1000, label });
 
 async function overlayCSS() {
@@ -139,9 +141,12 @@ async function countRecoveries() {
 
 // ---------------------------------------------------------------- script
 
-await page.goto(BASE, { waitUntil: "networkidle" });
+// The dashboard polls continuously, so "networkidle" never settles quickly.
+await page.goto(BASE, { waitUntil: "load" });
 await overlayCSS();
-await sleep(1500);
+await page.waitForSelector(".node");
+await sleep(2500); // let the charts collect a few samples
+mark("__start__");
 
 await card(
   `<div><h1>NebulaOS</h1><h2>a self-healing distributed cloud orchestrator — built from scratch in Go</h2>

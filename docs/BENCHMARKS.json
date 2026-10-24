@@ -1,0 +1,182 @@
+{
+  "when": "2026-10-25T00:53:46.60625+05:30",
+  "host": "darwin/arm64, 8 CPUs",
+  "nodes": 5,
+  "replicas": 20,
+  "cold_start_ms": 681,
+  "sched_p50_ms": 6,
+  "sched_p99_ms": 6,
+  "start_p50_ms": 499,
+  "start_p99_ms": 499,
+  "deploy_all_ms": 561,
+  "write_ops_per_sec": 730.4,
+  "write_p50_ms": 21.38,
+  "write_p99_ms": 38.013,
+  "scenarios": [
+    {
+      "scenario": {
+        "Name": "follower-crash",
+        "Description": "SIGKILL one follower that is running workloads",
+        "KillLeader": false,
+        "Followers": 1
+      },
+      "runs": [
+        {
+          "election_ms": 0,
+          "detect_ms": 2057,
+          "recovery_ms": 2471,
+          "heal_ms": 403,
+          "moved": 5,
+          "availability": 0.9944444444444445,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 0,
+          "detect_ms": 1804,
+          "recovery_ms": 2195,
+          "heal_ms": 0,
+          "moved": 6,
+          "availability": 0.9937546468401489,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 0,
+          "detect_ms": 1896,
+          "recovery_ms": 2287,
+          "heal_ms": 0,
+          "moved": 3,
+          "availability": 0.996859813084112,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 0,
+          "detect_ms": 1929,
+          "recovery_ms": 2546,
+          "heal_ms": 605,
+          "moved": 8,
+          "availability": 0.9898507462686569,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 0,
+          "detect_ms": 1891,
+          "recovery_ms": 2482,
+          "heal_ms": 0,
+          "moved": 8,
+          "availability": 0.9889681050656662,
+          "leader_up": 1
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Name": "leader-crash",
+        "Description": "SIGKILL the Raft leader (control plane + its workloads)",
+        "KillLeader": true,
+        "Followers": 0
+      },
+      "runs": [
+        {
+          "election_ms": 749,
+          "detect_ms": 2797,
+          "recovery_ms": 3187,
+          "heal_ms": 406,
+          "moved": 9,
+          "availability": 0.9881335952848723,
+          "leader_up": 0.9980353634577603
+        },
+        {
+          "election_ms": 568,
+          "detect_ms": 2595,
+          "recovery_ms": 3205,
+          "heal_ms": 606,
+          "moved": 3,
+          "availability": 0.995486381322957,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 534,
+          "detect_ms": 2570,
+          "recovery_ms": 3149,
+          "heal_ms": 0,
+          "moved": 6,
+          "availability": 0.9902135922330099,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 589,
+          "detect_ms": 2618,
+          "recovery_ms": 3207,
+          "heal_ms": 0,
+          "moved": 8,
+          "availability": 0.9878362573099417,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 519,
+          "detect_ms": 2557,
+          "recovery_ms": 3146,
+          "heal_ms": 602,
+          "moved": 3,
+          "availability": 0.9957281553398057,
+          "leader_up": 1
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Name": "leader+follower-crash",
+        "Description": "SIGKILL the leader and one follower: 2 of 5 nodes",
+        "KillLeader": true,
+        "Followers": 1
+      },
+      "runs": [
+        {
+          "election_ms": 554,
+          "detect_ms": 2573,
+          "recovery_ms": 3085,
+          "heal_ms": 505,
+          "moved": 17,
+          "availability": 0.9781960784313724,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 682,
+          "detect_ms": 2730,
+          "recovery_ms": 3205,
+          "heal_ms": 0,
+          "moved": 13,
+          "availability": 0.9824950495049507,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 648,
+          "detect_ms": 2687,
+          "recovery_ms": 3275,
+          "heal_ms": 608,
+          "moved": 20,
+          "availability": 0.9700000000000001,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 539,
+          "detect_ms": 2573,
+          "recovery_ms": 3167,
+          "heal_ms": 605,
+          "moved": 18,
+          "availability": 0.9705263157894737,
+          "leader_up": 1
+        },
+        {
+          "election_ms": 551,
+          "detect_ms": 2582,
+          "recovery_ms": 3279,
+          "heal_ms": 703,
+          "moved": 19,
+          "availability": 0.967017543859649,
+          "leader_up": 1
+        }
+      ]
+    }
+  ]
+}
