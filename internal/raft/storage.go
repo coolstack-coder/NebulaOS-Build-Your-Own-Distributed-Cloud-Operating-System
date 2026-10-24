@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 
 	pb "github.com/coolstack-coder/nebulaos/gen/nebula/v1"
 	"google.golang.org/protobuf/proto"
@@ -27,6 +28,10 @@ type Storage interface {
 	SaveState(term uint64, votedFor string) error
 	LoadLog() ([]*pb.LogEntry, error)
 	AppendLog(entries []*pb.LogEntry) error
+	// AppendLogNoSync writes entries without waiting for the disk; a later
+	// Sync makes them durable. The leader uses this for group commit.
+	AppendLogNoSync(entries []*pb.LogEntry) error
+	Sync() error
 	RewriteLog(entries []*pb.LogEntry) error
 	LoadSnapshot() (index, term uint64, data []byte, err error)
 	SaveSnapshot(index, term uint64, data []byte) error
@@ -42,8 +47,10 @@ type hardState struct {
 type FileStorage struct {
 	dir   string
 	sync  bool
-	logF  *os.File
 	crcTb *crc32.Table
+
+	mu   sync.Mutex // guards logF, which RewriteLog swaps
+	logF *os.File
 }
 
 // NewFileStorage opens (or creates) Raft storage under dir. When sync is
@@ -141,6 +148,13 @@ func (s *FileStorage) encode(entries []*pb.LogEntry) ([]byte, error) {
 }
 
 func (s *FileStorage) AppendLog(entries []*pb.LogEntry) error {
+	if err := s.AppendLogNoSync(entries); err != nil {
+		return err
+	}
+	return s.Sync()
+}
+
+func (s *FileStorage) AppendLogNoSync(entries []*pb.LogEntry) error {
 	if len(entries) == 0 {
 		return nil
 	}
@@ -148,13 +162,28 @@ func (s *FileStorage) AppendLog(entries []*pb.LogEntry) error {
 	if err != nil {
 		return err
 	}
-	if _, err := s.logF.Write(b); err != nil {
-		return err
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err = s.logF.Write(b)
+	return err
+}
+
+// Sync flushes everything written so far. It deliberately does not hold the
+// lock across the fsync so appends can continue while the disk catches up.
+func (s *FileStorage) Sync() error {
+	if !s.sync {
+		return nil
 	}
-	if s.sync {
-		return s.logF.Sync()
+	s.mu.Lock()
+	f := s.logF
+	s.mu.Unlock()
+	err := f.Sync()
+	if errors.Is(err, os.ErrClosed) {
+		// RewriteLog replaced the file meanwhile; it fsyncs the new one,
+		// which holds every entry we were asked to make durable.
+		return nil
 	}
-	return nil
+	return err
 }
 
 func (s *FileStorage) RewriteLog(entries []*pb.LogEntry) error {
@@ -162,6 +191,8 @@ func (s *FileStorage) RewriteLog(entries []*pb.LogEntry) error {
 	if err != nil {
 		return err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if err := s.writeAtomic("raft.log", b); err != nil {
 		return err
 	}
@@ -226,7 +257,11 @@ func (s *FileStorage) writeAtomic(name string, b []byte) error {
 	return os.Rename(tmp, s.path(name))
 }
 
-func (s *FileStorage) Close() error { return s.logF.Close() }
+func (s *FileStorage) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.logF.Close()
+}
 
 // MemoryStorage keeps everything in RAM. Used by tests, where it also lets a
 // "crashed" node restart with exactly the state it had persisted.
@@ -253,6 +288,8 @@ func (m *MemoryStorage) AppendLog(e []*pb.LogEntry) error {
 	m.log = append(m.log, e...)
 	return nil
 }
+func (m *MemoryStorage) AppendLogNoSync(e []*pb.LogEntry) error { return m.AppendLog(e) }
+func (m *MemoryStorage) Sync() error                            { return nil }
 func (m *MemoryStorage) RewriteLog(e []*pb.LogEntry) error {
 	m.log = append([]*pb.LogEntry(nil), e...)
 	return nil

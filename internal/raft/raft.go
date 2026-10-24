@@ -141,6 +141,11 @@ type Node struct {
 	lastLeaderSeen   time.Time
 	leaderSince      time.Time
 
+	// durable is the highest log index the leader knows is on its own disk.
+	// With group commit it trails lastIndex by at most one fsync.
+	durable   uint64
+	persistCh chan struct{}
+
 	pendingSnap  []byte
 	futures      map[uint64]*future
 	applyCond    *sync.Cond
@@ -173,6 +178,7 @@ func New(cfg Config) (*Node, error) {
 		log:          cfg.Logger.With("component", "raft", "id", cfg.ID),
 		futures:      map[uint64]*future{},
 		stopCh:       make(chan struct{}),
+		persistCh:    make(chan struct{}, 1),
 		leaderEvents: make(chan leaderEvent, 64),
 	}
 	n.applyCond = sync.NewCond(&n.mu)
@@ -220,7 +226,8 @@ func (n *Node) Start() {
 	n.mu.Lock()
 	n.resetElectionTimer()
 	n.mu.Unlock()
-	n.wg.Add(3)
+	n.wg.Add(4)
+	go n.persister()
 	go n.ticker()
 	go n.applier()
 	go n.leaderNotifier()
@@ -309,6 +316,9 @@ func (n *Node) becomeLeader() {
 	n.lastContact = map[string]time.Time{}
 	n.notify = map[string]chan struct{}{}
 	n.log.Info("became leader", "term", n.term, "last_index", n.lastIndex())
+
+	// Everything we hold was fsynced when we received it as a follower.
+	n.durable = n.lastIndex()
 
 	// A no-op in the new term lets us commit (and therefore learn the commit
 	// status of) everything inherited from previous leaders.
@@ -551,10 +561,18 @@ func (n *Node) HandleRequestVote(req *pb.VoteRequest) *pb.VoteResponse {
 func (n *Node) appendLocal(e *pb.LogEntry) uint64 {
 	e.Index = n.lastIndex() + 1
 	e.Term = n.term
-	if err := n.cfg.Storage.AppendLog([]*pb.LogEntry{e}); err != nil {
+	// The leader may send entries to followers before they hit its own disk
+	// (Raft thesis 10.2.1); it just can't count itself towards the quorum
+	// until the persister has fsynced them. Concurrent proposals therefore
+	// share one fsync: group commit.
+	if err := n.cfg.Storage.AppendLogNoSync([]*pb.LogEntry{e}); err != nil {
 		panic("raft: appending to log: " + err.Error())
 	}
 	n.entries = append(n.entries, e)
+	select {
+	case n.persistCh <- struct{}{}:
+	default:
+	}
 	for _, ch := range n.notify {
 		select {
 		case ch <- struct{}{}:
@@ -715,8 +733,33 @@ func (n *Node) sendSnapshot(id, addr string, term uint64) bool {
 
 // advanceCommit moves commitIndex to the highest index replicated on a
 // majority whose entry is from the current term (Figure 8 safety rule).
+func (n *Node) persister() {
+	defer n.wg.Done()
+	for {
+		select {
+		case <-n.stopCh:
+			return
+		case <-n.persistCh:
+		}
+		n.mu.Lock()
+		target := n.lastIndex()
+		n.mu.Unlock()
+		if err := n.cfg.Storage.Sync(); err != nil {
+			panic("raft: fsync: " + err.Error())
+		}
+		n.mu.Lock()
+		if target > n.durable {
+			n.durable = target
+		}
+		if n.role == Leader {
+			n.advanceCommit()
+		}
+		n.mu.Unlock()
+	}
+}
+
 func (n *Node) advanceCommit() {
-	matches := []uint64{n.lastIndex()}
+	matches := []uint64{min(n.lastIndex(), n.durable)}
 	for _, m := range n.matchIndex {
 		matches = append(matches, m)
 	}
