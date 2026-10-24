@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	pb "github.com/coolstack-coder/nebulaos/gen/nebula/v1"
+	"github.com/coolstack-coder/nebulaos/internal/grpcx"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 // GRPCTransport sends Raft RPCs over gRPC, caching one client connection per
@@ -27,10 +27,7 @@ func (t *GRPCTransport) client(addr string) (pb.RaftClient, error) {
 	if c, ok := t.conns[addr]; ok {
 		return pb.NewRaftClient(c), nil
 	}
-	c, err := grpc.NewClient(addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(64<<20), grpc.MaxCallSendMsgSize(64<<20)),
-	)
+	c, err := grpcx.Dial(addr)
 	if err != nil {
 		return nil, err
 	}

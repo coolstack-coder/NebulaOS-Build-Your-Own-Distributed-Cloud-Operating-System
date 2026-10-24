@@ -141,15 +141,15 @@ type Node struct {
 	lastLeaderSeen   time.Time
 	leaderSince      time.Time
 
-	pendingSnap   []byte
-	futures       map[uint64]*future
-	applyCond     *sync.Cond
-	stopped       bool
-	stopCh        chan struct{}
-	wg            sync.WaitGroup
-	leaderEvents  chan leaderEvent
-	stats         Stats
-	snapshotting  bool
+	pendingSnap  []byte
+	futures      map[uint64]*future
+	applyCond    *sync.Cond
+	stopped      bool
+	stopCh       chan struct{}
+	wg           sync.WaitGroup
+	leaderEvents chan leaderEvent
+	stats        Stats
+	snapshotting bool
 }
 
 type leaderEvent struct {
@@ -433,6 +433,7 @@ func (n *Node) runElection() {
 	if !n.collectVotes(req) {
 		return
 	}
+	n.log.Info("pre-vote succeeded", "next_term", req.Term)
 
 	// Phase 2: the real election.
 	n.mu.Lock()
