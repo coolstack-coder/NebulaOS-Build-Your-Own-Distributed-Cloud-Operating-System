@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 2s
+  evaluation_interval: 2s
+
+scrape_configs:
+  - job_name: nebula
+    static_configs:
+      - targets: ["n1:8000", "n2:8000", "n3:8000", "n4:8000", "n5:8000"]
+  # For `nebula demo` on the host instead of compose, use:
+  #   targets: ["host.docker.internal:8701", ..., "host.docker.internal:8705"]

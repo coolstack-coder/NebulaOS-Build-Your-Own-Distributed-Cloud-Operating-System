@@ -1,0 +1,8 @@
+bin
+data
+.nebula
+web/node_modules
+web/dist
+docs/*.mp4
+docs/*.gif
+.git

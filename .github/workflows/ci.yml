@@ -1,0 +1,33 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build dashboard
+        run: make web
+      - name: Vet
+        run: go vet ./...
+      - name: Test (race detector)
+        run: go test -race -count=1 ./...
+      - name: Build binary
+        run: make go
+      - name: Smoke test a 5-node cluster
+        run: |
+          ./bin/nebula demo --port 9000 > demo.log 2>&1 &
+          for i in $(seq 1 40); do curl -sf localhost:9000/api/overview >/dev/null && break; sleep 0.5; done
+          sleep 6
+          ./bin/nebula ctl --addr http://127.0.0.1:9000 status
+          ./bin/nebula ctl --addr http://127.0.0.1:9000 get nodes

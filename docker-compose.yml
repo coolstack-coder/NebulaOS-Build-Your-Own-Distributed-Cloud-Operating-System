@@ -1,0 +1,85 @@
+# A five-node NebulaOS cluster with Prometheus and Grafana.
+#
+#   docker compose up -d --build
+#   open http://localhost:8080          # NebulaOS dashboard (via n1)
+#   open http://localhost:3000          # Grafana (admin / nebula)
+#   docker kill nebula-n2 nebula-n3     # break it
+#   docker compose start n2 n3          # bring them back
+x-node: &node
+  build: .
+  image: nebulaos:local
+  restart: "no"
+  networks: [nebula]
+  healthcheck:
+    test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8000/healthz"]
+    interval: 5s
+    timeout: 2s
+
+x-peers: &peers "n1=n1:7000,n2=n2:7000,n3=n3:7000,n4=n4:7000,n5=n5:7000"
+
+services:
+  n1:
+    <<: *node
+    container_name: nebula-n1
+    hostname: n1
+    command: [node, --id, n1, --grpc, "0.0.0.0:7000", --api, "0.0.0.0:8000", --advertise-grpc, "n1:7000", --advertise-api, "n1:8000",
+              --peers, *peers, --data, /data, --cpu, "4000", --mem, "8192", --labels, "zone=a"]
+    ports: ["8080:8000"]
+    volumes: [n1:/data]
+  n2:
+    <<: *node
+    container_name: nebula-n2
+    hostname: n2
+    command: [node, --id, n2, --grpc, "0.0.0.0:7000", --api, "0.0.0.0:8000", --advertise-grpc, "n2:7000", --advertise-api, "n2:8000",
+              --peers, *peers, --data, /data, --cpu, "4000", --mem, "8192", --labels, "zone=b"]
+    ports: ["8082:8000"]
+    volumes: [n2:/data]
+  n3:
+    <<: *node
+    container_name: nebula-n3
+    hostname: n3
+    command: [node, --id, n3, --grpc, "0.0.0.0:7000", --api, "0.0.0.0:8000", --advertise-grpc, "n3:7000", --advertise-api, "n3:8000",
+              --peers, *peers, --data, /data, --cpu, "4000", --mem, "8192", --labels, "zone=c"]
+    ports: ["8083:8000"]
+    volumes: [n3:/data]
+  n4:
+    <<: *node
+    container_name: nebula-n4
+    hostname: n4
+    command: [node, --id, n4, --grpc, "0.0.0.0:7000", --api, "0.0.0.0:8000", --advertise-grpc, "n4:7000", --advertise-api, "n4:8000",
+              --peers, *peers, --data, /data, --cpu, "4000", --mem, "8192", --labels, "zone=a"]
+    ports: ["8084:8000"]
+    volumes: [n4:/data]
+  n5:
+    <<: *node
+    container_name: nebula-n5
+    hostname: n5
+    command: [node, --id, n5, --grpc, "0.0.0.0:7000", --api, "0.0.0.0:8000", --advertise-grpc, "n5:7000", --advertise-api, "n5:8000",
+              --peers, *peers, --data, /data, --cpu, "4000", --mem, "8192", --labels, "zone=b"]
+    ports: ["8085:8000"]
+    volumes: [n5:/data]
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: nebula-prometheus
+    networks: [nebula]
+    volumes: ["./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: nebula-grafana
+    networks: [nebula]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: nebula
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["3000:3000"]
+
+networks:
+  nebula: {}
+
+volumes: { n1: {}, n2: {}, n3: {}, n4: {}, n5: {} }
