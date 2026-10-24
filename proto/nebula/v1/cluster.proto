@@ -40,6 +40,8 @@ message HeartbeatRequest {
   repeated TaskStatus tasks = 6;
   string runtime = 7;
   bool voter = 8;
+  // HTTP API address, used by followers to proxy dashboard reads.
+  string api_address = 9;
 }
 
 message TaskAssignment {
@@ -62,6 +64,7 @@ message HeartbeatResponse {
   repeated TaskAssignment assignments = 3;
   // False when the leader does not know this node yet (it then registers it).
   bool known = 4;
+  string leader_address = 5;
 }
 
 message SubmitRequest {
@@ -72,4 +75,5 @@ message SubmitResponse {
   uint64 index = 1;
   string error = 2;
   string leader_id = 3;
+  string leader_address = 4;
 }

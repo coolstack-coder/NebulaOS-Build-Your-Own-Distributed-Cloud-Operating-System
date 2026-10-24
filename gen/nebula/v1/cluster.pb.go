@@ -166,15 +166,17 @@ func (x *TaskStatus) GetStartedUnixMs() int64 {
 }
 
 type HeartbeatRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
-	Capacity      *Resources             `protobuf:"bytes,3,opt,name=capacity,proto3" json:"capacity,omitempty"`
-	Usage         *Resources             `protobuf:"bytes,4,opt,name=usage,proto3" json:"usage,omitempty"`
-	Labels        map[string]string      `protobuf:"bytes,5,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Tasks         []*TaskStatus          `protobuf:"bytes,6,rep,name=tasks,proto3" json:"tasks,omitempty"`
-	Runtime       string                 `protobuf:"bytes,7,opt,name=runtime,proto3" json:"runtime,omitempty"`
-	Voter         bool                   `protobuf:"varint,8,opt,name=voter,proto3" json:"voter,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	NodeId   string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Address  string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	Capacity *Resources             `protobuf:"bytes,3,opt,name=capacity,proto3" json:"capacity,omitempty"`
+	Usage    *Resources             `protobuf:"bytes,4,opt,name=usage,proto3" json:"usage,omitempty"`
+	Labels   map[string]string      `protobuf:"bytes,5,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Tasks    []*TaskStatus          `protobuf:"bytes,6,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	Runtime  string                 `protobuf:"bytes,7,opt,name=runtime,proto3" json:"runtime,omitempty"`
+	Voter    bool                   `protobuf:"varint,8,opt,name=voter,proto3" json:"voter,omitempty"`
+	// HTTP API address, used by followers to proxy dashboard reads.
+	ApiAddress    string `protobuf:"bytes,9,opt,name=api_address,json=apiAddress,proto3" json:"api_address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -263,6 +265,13 @@ func (x *HeartbeatRequest) GetVoter() bool {
 		return x.Voter
 	}
 	return false
+}
+
+func (x *HeartbeatRequest) GetApiAddress() string {
+	if x != nil {
+		return x.ApiAddress
+	}
+	return ""
 }
 
 type TaskAssignment struct {
@@ -381,7 +390,8 @@ type HeartbeatResponse struct {
 	Term        uint64                 `protobuf:"varint,2,opt,name=term,proto3" json:"term,omitempty"`
 	Assignments []*TaskAssignment      `protobuf:"bytes,3,rep,name=assignments,proto3" json:"assignments,omitempty"`
 	// False when the leader does not know this node yet (it then registers it).
-	Known         bool `protobuf:"varint,4,opt,name=known,proto3" json:"known,omitempty"`
+	Known         bool   `protobuf:"varint,4,opt,name=known,proto3" json:"known,omitempty"`
+	LeaderAddress string `protobuf:"bytes,5,opt,name=leader_address,json=leaderAddress,proto3" json:"leader_address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -444,6 +454,13 @@ func (x *HeartbeatResponse) GetKnown() bool {
 	return false
 }
 
+func (x *HeartbeatResponse) GetLeaderAddress() string {
+	if x != nil {
+		return x.LeaderAddress
+	}
+	return ""
+}
+
 type SubmitRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Command       []byte                 `protobuf:"bytes,1,opt,name=command,proto3" json:"command,omitempty"`
@@ -493,6 +510,7 @@ type SubmitResponse struct {
 	Index         uint64                 `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"`
 	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
 	LeaderId      string                 `protobuf:"bytes,3,opt,name=leader_id,json=leaderId,proto3" json:"leader_id,omitempty"`
+	LeaderAddress string                 `protobuf:"bytes,4,opt,name=leader_address,json=leaderAddress,proto3" json:"leader_address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -548,6 +566,13 @@ func (x *SubmitResponse) GetLeaderId() string {
 	return ""
 }
 
+func (x *SubmitResponse) GetLeaderAddress() string {
+	if x != nil {
+		return x.LeaderAddress
+	}
+	return ""
+}
+
 var File_nebula_v1_cluster_proto protoreflect.FileDescriptor
 
 const file_nebula_v1_cluster_proto_rawDesc = "" +
@@ -566,7 +591,7 @@ const file_nebula_v1_cluster_proto_rawDesc = "" +
 	"cpu_millis\x18\x04 \x01(\x03R\tcpuMillis\x12\x1b\n" +
 	"\tmemory_mb\x18\x05 \x01(\x03R\bmemoryMb\x12\x1a\n" +
 	"\brestarts\x18\x06 \x01(\x05R\brestarts\x12&\n" +
-	"\x0fstarted_unix_ms\x18\a \x01(\x03R\rstartedUnixMs\"\xfc\x02\n" +
+	"\x0fstarted_unix_ms\x18\a \x01(\x03R\rstartedUnixMs\"\x9d\x03\n" +
 	"\x10HeartbeatRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x120\n" +
@@ -575,7 +600,9 @@ const file_nebula_v1_cluster_proto_rawDesc = "" +
 	"\x06labels\x18\x05 \x03(\v2'.nebula.v1.HeartbeatRequest.LabelsEntryR\x06labels\x12+\n" +
 	"\x05tasks\x18\x06 \x03(\v2\x15.nebula.v1.TaskStatusR\x05tasks\x12\x18\n" +
 	"\aruntime\x18\a \x01(\tR\aruntime\x12\x14\n" +
-	"\x05voter\x18\b \x01(\bR\x05voter\x1a9\n" +
+	"\x05voter\x18\b \x01(\bR\x05voter\x12\x1f\n" +
+	"\vapi_address\x18\t \x01(\tR\n" +
+	"apiAddress\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xed\x02\n" +
@@ -591,18 +618,20 @@ const file_nebula_v1_cluster_proto_rawDesc = "" +
 	"\breplicas\x18\t \x01(\x05R\breplicas\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x97\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbe\x01\n" +
 	"\x11HeartbeatResponse\x12\x1b\n" +
 	"\tleader_id\x18\x01 \x01(\tR\bleaderId\x12\x12\n" +
 	"\x04term\x18\x02 \x01(\x04R\x04term\x12;\n" +
 	"\vassignments\x18\x03 \x03(\v2\x19.nebula.v1.TaskAssignmentR\vassignments\x12\x14\n" +
-	"\x05known\x18\x04 \x01(\bR\x05known\")\n" +
+	"\x05known\x18\x04 \x01(\bR\x05known\x12%\n" +
+	"\x0eleader_address\x18\x05 \x01(\tR\rleaderAddress\")\n" +
 	"\rSubmitRequest\x12\x18\n" +
-	"\acommand\x18\x01 \x01(\fR\acommand\"Y\n" +
+	"\acommand\x18\x01 \x01(\fR\acommand\"\x80\x01\n" +
 	"\x0eSubmitResponse\x12\x14\n" +
 	"\x05index\x18\x01 \x01(\x04R\x05index\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12\x1b\n" +
-	"\tleader_id\x18\x03 \x01(\tR\bleaderId2\x90\x01\n" +
+	"\tleader_id\x18\x03 \x01(\tR\bleaderId\x12%\n" +
+	"\x0eleader_address\x18\x04 \x01(\tR\rleaderAddress2\x90\x01\n" +
 	"\aCluster\x12F\n" +
 	"\tHeartbeat\x12\x1b.nebula.v1.HeartbeatRequest\x1a\x1c.nebula.v1.HeartbeatResponse\x12=\n" +
 	"\x06Submit\x12\x18.nebula.v1.SubmitRequest\x1a\x19.nebula.v1.SubmitResponseB<Z:github.com/coolstack-coder/nebulaos/gen/nebula/v1;nebulav1b\x06proto3"
