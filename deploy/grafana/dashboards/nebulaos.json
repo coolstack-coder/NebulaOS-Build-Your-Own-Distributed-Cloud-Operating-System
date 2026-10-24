@@ -29,8 +29,9 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "nebula_raft_is_leader == 1",
-          "legendFormat": "{{instance}}"
+          "expr": "(nebula_raft_is_leader == 1) and on(instance) (up == 1)",
+          "legendFormat": "{{instance}}",
+          "instant": true
         }
       ],
       "fieldConfig": {
@@ -60,7 +61,8 @@
         {
           "refId": "A",
           "expr": "max(nebula_raft_term)",
-          "legendFormat": "term"
+          "legendFormat": "term",
+          "instant": true
         }
       ],
       "fieldConfig": {
@@ -87,7 +89,8 @@
         {
           "refId": "A",
           "expr": "max(nebula_nodes{status=\"ready\"} * on(instance) group_left() (nebula_raft_is_leader == 1))",
-          "legendFormat": "ready"
+          "legendFormat": "ready",
+          "instant": true
         }
       ],
       "fieldConfig": {
@@ -114,7 +117,8 @@
         {
           "refId": "A",
           "expr": "max(nebula_nodes{status=\"down\"} * on(instance) group_left() (nebula_raft_is_leader == 1))",
-          "legendFormat": "down"
+          "legendFormat": "down",
+          "instant": true
         }
       ],
       "fieldConfig": {
@@ -155,7 +159,8 @@
         {
           "refId": "A",
           "expr": "max(nebula_tasks{state=\"running\"} * on(instance) group_left() (nebula_raft_is_leader == 1))",
-          "legendFormat": "running"
+          "legendFormat": "running",
+          "instant": true
         }
       ],
       "fieldConfig": {
@@ -182,7 +187,8 @@
         {
           "refId": "A",
           "expr": "histogram_quantile(0.5, sum by (le) (increase(nebula_failure_recovery_seconds_bucket[30m])))",
-          "legendFormat": "p50"
+          "legendFormat": "p50",
+          "instant": true
         }
       ],
       "fieldConfig": {
@@ -211,7 +217,8 @@
         {
           "refId": "A",
           "expr": "sum(increase(nebula_node_failures_total[1h]))",
-          "legendFormat": "failures"
+          "legendFormat": "failures",
+          "instant": true
         }
       ],
       "fieldConfig": {
