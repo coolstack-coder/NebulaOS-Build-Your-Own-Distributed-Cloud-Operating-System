@@ -91,7 +91,10 @@ func (o *OCI) Start(ctx context.Context, spec Spec) error {
 			o.mu.Lock()
 			o.state[spec.TaskID] = Status{State: Failed, Message: err.Error()}
 			o.mu.Unlock()
+			return
 		}
+		// Don't wait for the next poll to report it running.
+		o.refresh(pctx)
 	}()
 	return nil
 }
@@ -132,10 +135,10 @@ func (o *OCI) Close() error {
 	return nil
 }
 
-// poll refreshes container state and usage every two seconds in one
-// `ps` + one `stats` call for all containers on this node.
+// poll refreshes container state and usage every second with one `ps` and
+// one `stats` call covering all containers on this node.
 func (o *OCI) poll() {
-	t := time.NewTicker(2 * time.Second)
+	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for {
 		select {
@@ -155,51 +158,61 @@ func (o *OCI) refresh(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	type row struct{ state, status, name string }
-	rows := map[string]row{}
-	var running []string
+	names := map[string]string{} // task id -> container name, running only
+	o.mu.Lock()
 	for _, l := range strings.Split(out, "\n") {
 		f := strings.SplitN(strings.TrimSpace(l), "|", 4)
 		if len(f) != 4 || f[0] == "" {
 			continue
 		}
-		rows[f[0]] = row{f[1], f[2], f[3]}
-		if f[1] == "running" {
-			running = append(running, f[3])
-		}
-	}
-	usage := map[string][2]int64{}
-	if len(running) > 0 {
-		args := append([]string{"stats", "--no-stream", "--format", "{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}"}, running...)
-		if s, err := o.run(ctx, args...); err == nil {
-			for _, l := range strings.Split(s, "\n") {
-				f := strings.SplitN(strings.TrimSpace(l), "|", 3)
-				if len(f) == 3 {
-					usage[f[0]] = [2]int64{parsePercent(f[1]) * 10, parseMem(f[2])}
-				}
-			}
-		}
-	}
-
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	for id, st := range o.state {
-		r, ok := rows[id]
+		id, state, status := f[0], f[1], f[2]
+		st, ok := o.state[id]
 		if !ok {
-			continue // still pulling, or failed to start (state already says so)
+			continue // not ours any more
 		}
-		switch r.state {
+		switch state {
 		case "running":
-			u := usage[r.name]
-			o.state[id] = Status{State: Running, CPU: u[0], Memory: u[1], StartedAt: st.StartedAt}
+			o.state[id] = Status{State: Running, CPU: st.CPU, Memory: st.Memory, StartedAt: st.StartedAt}
+			names[id] = f[3]
 		case "created", "restarting":
-			o.state[id] = Status{State: Starting, Message: r.status, StartedAt: st.StartedAt}
+			o.state[id] = Status{State: Starting, Message: status, StartedAt: st.StartedAt}
 		case "exited", "dead":
 			s := Failed
-			if strings.Contains(r.status, "(0)") {
+			if strings.Contains(status, "(0)") {
 				s = Exited
 			}
-			o.state[id] = Status{State: s, Message: r.status, StartedAt: st.StartedAt}
+			o.state[id] = Status{State: s, Message: status, StartedAt: st.StartedAt}
+		}
+	}
+	o.mu.Unlock()
+	if len(names) == 0 {
+		return
+	}
+
+	// `stats --no-stream` takes a second to sample, so it runs after the
+	// state update rather than delaying it.
+	args := []string{"stats", "--no-stream", "--format", "{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}"}
+	for _, n := range names {
+		args = append(args, n)
+	}
+	s, err := o.run(ctx, args...)
+	if err != nil {
+		return
+	}
+	usage := map[string][2]int64{}
+	for _, l := range strings.Split(s, "\n") {
+		f := strings.SplitN(strings.TrimSpace(l), "|", 3)
+		if len(f) == 3 {
+			usage[f[0]] = [2]int64{parsePercent(f[1]) * 10, parseMem(f[2])}
+		}
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	for id, name := range names {
+		if st, ok := o.state[id]; ok && st.State == Running {
+			u := usage[name]
+			st.CPU, st.Memory = u[0], u[1]
+			o.state[id] = st
 		}
 	}
 }
