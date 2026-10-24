@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package nebula.v1;
+
+option go_package = "github.com/coolstack-coder/nebulaos/gen/nebula/v1;nebulav1";
+
+// Cluster is the control-plane API that agents and peers use. Every server
+// exposes it; followers forward writes to the current leader so callers can
+// talk to any member.
+service Cluster {
+  // Agents report liveness, resource usage and task state. The response
+  // carries the full set of tasks the leader wants running on that node, so
+  // agents are level-triggered: they converge on whatever the leader says.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  // Submit replicates an opaque state-machine command through Raft.
+  rpc Submit(SubmitRequest) returns (SubmitResponse);
+}
+
+message Resources {
+  int64 cpu_millis = 1;
+  int64 memory_mb = 2;
+}
+
+message TaskStatus {
+  string task_id = 1;
+  string state = 2; // starting | running | failed | exited
+  string message = 3;
+  int64 cpu_millis = 4;
+  int64 memory_mb = 5;
+  int32 restarts = 6;
+  int64 started_unix_ms = 7;
+}
+
+message HeartbeatRequest {
+  string node_id = 1;
+  string address = 2;
+  Resources capacity = 3;
+  Resources usage = 4;
+  map<string, string> labels = 5;
+  repeated TaskStatus tasks = 6;
+  string runtime = 7;
+  bool voter = 8;
+}
+
+message TaskAssignment {
+  string task_id = 1;
+  string service = 2;
+  string image = 3;
+  repeated string command = 4;
+  map<string, string> env = 5;
+  Resources request = 6;
+  int32 port = 7;
+  // Simulated runtime only: total CPU demand for the whole service and the
+  // current replica count, so each replica can model its share of traffic.
+  int64 sim_demand_millis = 8;
+  int32 replicas = 9;
+}
+
+message HeartbeatResponse {
+  string leader_id = 1;
+  uint64 term = 2;
+  repeated TaskAssignment assignments = 3;
+  // False when the leader does not know this node yet (it then registers it).
+  bool known = 4;
+}
+
+message SubmitRequest {
+  bytes command = 1;
+}
+
+message SubmitResponse {
+  uint64 index = 1;
+  string error = 2;
+  string leader_id = 3;
+}
