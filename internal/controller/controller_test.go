@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,10 +16,9 @@ import (
 // harness applies commands straight to an FSM, standing in for Raft.
 func harness(t *testing.T, cfg Config) (*Controller, *state.FSM) {
 	fsm := state.NewFSM()
-	var idx uint64
+	var idx atomic.Uint64
 	submit := func(_ context.Context, c state.Command) error {
-		idx++
-		if res := fsm.Apply(idx, c.Encode()); res != nil {
+		if res := fsm.Apply(idx.Add(1), c.Encode()); res != nil {
 			if err, ok := res.(error); ok {
 				return err
 			}
@@ -124,5 +124,17 @@ func TestFailureDetectorMarksSilentNodesDown(t *testing.T) {
 	}
 	if v.Nodes["n1"].Status != state.NodeReady || v.Nodes["n2"].Status != state.NodeReady {
 		t.Fatal("healthy node declared down")
+	}
+}
+
+func TestNewLeaderDoesNotScaleDownImmediately(t *testing.T) {
+	c, fsm := harness(t, Config{ScaleDownWindow: time.Hour, AutoscaleInterval: time.Hour})
+	seed(t, c, 6)
+	c.Start(2) // take over leadership with no autoscaling history
+	defer c.Stop()
+	report(c, fsm, 5) // load is low: the HPA formula alone would say 2
+	c.autoscale(context.Background())
+	if got := replicas(fsm); got != 6 {
+		t.Fatalf("new leader scaled down to %d before its stabilisation window", got)
 	}
 }

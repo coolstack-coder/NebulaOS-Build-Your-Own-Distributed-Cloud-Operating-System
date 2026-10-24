@@ -141,6 +141,16 @@ func (c *Controller) Start(term uint64) {
 	})
 	c.updates = map[string]state.TaskUpdate{}
 	c.registering = map[string]time.Time{}
+	// A new leader has no autoscaling history. Treat every service as just
+	// scaled so the scale-down stabilisation window starts now; otherwise a
+	// failover would shrink services on the strength of one noisy sample.
+	c.recs = map[string][]recommendation{}
+	c.lastScale = map[string]time.Time{}
+	c.fsm.Read(func(s *state.Snapshot) {
+		for name := range s.Services {
+			c.lastScale[name] = now
+		}
+	})
 	done := c.done
 	c.mu.Unlock()
 
