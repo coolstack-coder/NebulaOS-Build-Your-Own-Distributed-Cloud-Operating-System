@@ -254,7 +254,28 @@ func (s *FileStorage) writeAtomic(name string, b []byte) error {
 	if err := f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path(name))
+	if err := os.Rename(tmp, s.path(name)); err != nil {
+		return err
+	}
+	if !s.sync {
+		return nil
+	}
+	// The rename is only durable once the directory is synced. Without this
+	// a power loss after compaction could keep the rewritten log but lose
+	// the snapshot it starts from.
+	return syncDir(s.dir)
+}
+
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	if err := d.Sync(); err != nil {
+		d.Close()
+		return err
+	}
+	return d.Close()
 }
 
 func (s *FileStorage) Close() error {
