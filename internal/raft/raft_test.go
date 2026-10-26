@@ -61,7 +61,12 @@ func (t memTransport) InstallSnapshot(_ context.Context, to string, r *pb.Snapsh
 	if err != nil {
 		return nil, err
 	}
-	return n.HandleInstallSnapshot(r), nil
+	resp := n.HandleInstallSnapshot(r)
+	// A node that died while handling the RPC never gets to reply.
+	if _, err := t.nw.target(t.from, to); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }
 
 // listFSM records every applied command so tests can compare histories.
@@ -96,29 +101,39 @@ func (f *listFSM) history() []string {
 }
 
 type cluster struct {
-	t        *testing.T
-	nw       *network
-	ids      []string
-	nodes    map[string]*Node
-	fsms     map[string]*listFSM
-	storages map[string]*MemoryStorage
-	snapAt   uint64
+	t      *testing.T
+	nw     *network
+	ids    []string
+	nodes  map[string]*Node
+	fsms   map[string]*listFSM
+	snapAt uint64
+	// open returns the storage a (re)started node recovers from.
+	open func(id string) Storage
 }
 
 func newCluster(t *testing.T, size int, snapshotThreshold uint64) *cluster {
+	mem := map[string]*MemoryStorage{}
+	return newClusterWith(t, size, snapshotThreshold, func(id string) Storage {
+		if mem[id] == nil {
+			mem[id] = NewMemoryStorage()
+		}
+		return mem[id]
+	})
+}
+
+func newClusterWith(t *testing.T, size int, snapshotThreshold uint64, open func(id string) Storage) *cluster {
 	c := &cluster{
-		t:        t,
-		nw:       &network{nodes: map[string]*Node{}, down: map[string]bool{}},
-		nodes:    map[string]*Node{},
-		fsms:     map[string]*listFSM{},
-		storages: map[string]*MemoryStorage{},
-		snapAt:   snapshotThreshold,
+		t:      t,
+		nw:     &network{nodes: map[string]*Node{}, down: map[string]bool{}},
+		nodes:  map[string]*Node{},
+		fsms:   map[string]*listFSM{},
+		snapAt: snapshotThreshold,
+		open:   open,
 	}
 	for i := 1; i <= size; i++ {
 		c.ids = append(c.ids, fmt.Sprintf("n%d", i))
 	}
 	for _, id := range c.ids {
-		c.storages[id] = NewMemoryStorage()
 		c.start(id)
 	}
 	t.Cleanup(func() {
@@ -129,7 +144,9 @@ func newCluster(t *testing.T, size int, snapshotThreshold uint64) *cluster {
 	return c
 }
 
-func (c *cluster) start(id string) {
+func (c *cluster) start(id string) { c.startWith(id, c.open(id)) }
+
+func (c *cluster) startWith(id string, storage Storage) {
 	peers := map[string]string{}
 	for _, p := range c.ids {
 		peers[p] = p // the in-memory transport addresses nodes by id
@@ -142,7 +159,7 @@ func (c *cluster) start(id string) {
 		ElectionTimeoutMin: 120 * time.Millisecond,
 		ElectionTimeoutMax: 240 * time.Millisecond,
 		SnapshotThreshold:  c.snapAt,
-		Storage:            c.storages[id],
+		Storage:            storage,
 		Transport:          memTransport{nw: c.nw, from: id},
 		FSM:                fsm,
 		Logger:             slog.New(slog.NewTextHandler(io.Discard, nil)),
